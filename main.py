@@ -2,22 +2,26 @@ import os
 import requests
 from flask import Flask, jsonify, request
 from flasgger import Swagger, swag_from
-from dotenv import load_dotenv
+# from dotenv import load_dotenv # You might not need this if only API_KEY is from env
 from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
-from dateutil.rrule import rrule, WEEKLY, MO, SU # For week start/end
+from dateutil.rrule import rrule, WEEKLY, MO, SU
 
 # --- Configuration ---
-load_dotenv()
+# load_dotenv() # Keep if you still want to test API_KEY locally via .env
 
+# Hardcode these values - REPLACE WITH YOUR ACTUAL VALUES
+POSTHOG_INSTANCE_URL = "https://us.posthog.com"  
+POSTHOG_PROJECT_ID = "128173"                    
+
+DAU_INSIGHT_ID = "E6G99KnQ"
+WAU_INSIGHT_ID = "F0cK26vH" 
+RETENTION_INSIGHT_ID = "qkZyszZl"
+GROWTH_ACCOUNTING_INSIGHT_ID = "uJFgIYDk"
+
+# Keep API Key as an environment variable for security
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY")
-POSTHOG_INSTANCE_URL = os.environ.get("POSTHOG_INSTANCE_URL")
-POSTHOG_PROJECT_ID = os.environ.get("POSTHOG_PROJECT_ID")
 
-DAU_INSIGHT_ID = os.environ.get("DAU_INSIGHT_ID")
-WAU_INSIGHT_ID = os.environ.get("WAU_INSIGHT_ID")
-RETENTION_INSIGHT_ID = os.environ.get("RETENTION_INSIGHT_ID")
-GROWTH_ACCOUNTING_INSIGHT_ID = os.environ.get("GROWTH_ACCOUNTING_INSIGHT_ID")
 
 app = Flask(__name__)
 swagger_config = {
@@ -38,10 +42,7 @@ swagger = Swagger(app, config=swagger_config)
 
 # --- Date Range Helper ---
 def get_date_range_params(time_range_str: str, custom_start_date_str: str = None, custom_end_date_str: str = None):
-    """
-    Converts a time range string into date_from and date_to parameters.
-    Returns a dictionary with 'date_from' and 'date_to' keys (YYYY-MM-DD format) or None.
-    """
+    # ... (Date Range Helper function remains exactly the same) ...
     today = date.today()
     params = {}
 
@@ -64,7 +65,7 @@ def get_date_range_params(time_range_str: str, custom_start_date_str: str = None
         params["date_to"] = last_week_end.strftime("%Y-%m-%d")
     elif time_range_str == "this_month":
         params["date_from"] = today.replace(day=1).strftime("%Y-%m-%d")
-        params["date_to"] = today.strftime("%Y-%m-%d") # Or end of month: (today.replace(day=1) + relativedelta(months=1) - timedelta(days=1)).strftime("%Y-%m-%d")
+        params["date_to"] = today.strftime("%Y-%m-%d")
     elif time_range_str == "last_month":
         last_month_end = today.replace(day=1) - timedelta(days=1)
         last_month_start = last_month_end.replace(day=1)
@@ -83,45 +84,36 @@ def get_date_range_params(time_range_str: str, custom_start_date_str: str = None
         params["date_from"] = (today - timedelta(days=89)).strftime("%Y-%m-%d")
         params["date_to"] = today.strftime("%Y-%m-%d")
     elif time_range_str == "all_time":
-        # For "all_time", we typically omit date_from and date_to for PostHog API
-        # or PostHog might have a specific way to denote this (e.g. "all")
-        # For now, returning an empty dict signifies no specific date range override
-        # which means PostHog will use the insight's default or its own "all time" logic.
-        return {} # No specific date params, rely on insight default or PostHog's all time
+        return {}
     elif time_range_str == "custom":
         if custom_start_date_str and custom_end_date_str:
             try:
-                # Validate date format (optional but good)
                 datetime.strptime(custom_start_date_str, "%Y-%m-%d")
                 datetime.strptime(custom_end_date_str, "%Y-%m-%d")
                 params["date_from"] = custom_start_date_str
                 params["date_to"] = custom_end_date_str
             except ValueError:
-                # Handle invalid date format if needed, or let PostHog API handle it
                 app.logger.warning(f"Invalid custom date format: start={custom_start_date_str}, end={custom_end_date_str}")
-                return {"error": "Invalid custom date format. Use YYYY-MM-DD."} # Error dict
+                return {"error": "Invalid custom date format. Use YYYY-MM-DD."}
         else:
             return {"error": "Custom time range requires start_date and end_date parameters."}
-    else: # Default to insight's saved time range if no valid time_range_str
+    else:
         return {}
-
     return params
-
 
 # --- Modified Helper Function to Fetch Data from PostHog ---
 def fetch_posthog_insight_data(insight_id: str, date_params: dict = None):
-    """
-    Fetches data for a given PostHog insight ID, with optional date range overrides.
-    """
-    if not all([POSTHOG_API_KEY, POSTHOG_INSTANCE_URL, POSTHOG_PROJECT_ID]):
-        # ... (same global config check as before) ...
-        missing_configs = [ name for name, var in [("POSTHOG_API_KEY", POSTHOG_API_KEY), ("POSTHOG_INSTANCE_URL", POSTHOG_INSTANCE_URL), ("POSTHOG_PROJECT_ID", POSTHOG_PROJECT_ID)] if not var]
-        error_msg = f"Missing global PostHog configuration(s): {', '.join(missing_configs)}"
+    # ... (Fetch PostHog Insight Data function remains largely the same) ...
+    # The check for global configs will now primarily be for POSTHOG_API_KEY
+    if not POSTHOG_API_KEY: # Simplified check
+        error_msg = "Missing global PostHog configuration: POSTHOG_API_KEY"
         app.logger.error(error_msg)
         return {"error": "Server configuration error", "details": error_msg}, 500
 
-    if not insight_id:
-        # ... (same insight_id check as before) ...
+    # POSTHOG_INSTANCE_URL and POSTHOG_PROJECT_ID are now hardcoded global vars
+    # No need to check them here again explicitly if hardcoded correctly
+
+    if not insight_id: # This check is still valid for the passed parameter
         error_msg = "Insight ID parameter is missing for fetch_posthog_insight_data function."
         app.logger.error(error_msg)
         return {"error": "Internal server error", "details": error_msg}, 500
@@ -130,60 +122,53 @@ def fetch_posthog_insight_data(insight_id: str, date_params: dict = None):
         "Authorization": f"Bearer {POSTHOG_API_KEY}",
         "Content-Type": "application/json",
     }
-
-    # Construct query parameters for PostHog API
-    query_params = {"refresh": "true"} # Always refresh when applying dynamic filters
+    query_params = {"refresh": "true"}
     if date_params and "date_from" in date_params and "date_to" in date_params:
         query_params["date_from"] = date_params["date_from"]
         query_params["date_to"] = date_params["date_to"]
-    # Add other potential overrides here if needed (e.g., interval)
 
-    # Use the base insight endpoint, not /results/, to allow parameter overrides
     api_url = f"{POSTHOG_INSTANCE_URL}/api/projects/{POSTHOG_PROJECT_ID}/insights/{insight_id}/"
 
     try:
-        response = requests.get(api_url, headers=headers, params=query_params, timeout=45) # Increased timeout
+        response = requests.get(api_url, headers=headers, params=query_params, timeout=45)
         response.raise_for_status()
         return response.json(), 200
     except requests.exceptions.HTTPError as errh:
-        # ... (same HTTPError handling as before) ...
         error_message = f"PostHog API HTTP Error: {errh.response.status_code} for insight {insight_id} with params {query_params}"
         try: error_detail = errh.response.json(); error_message += f" - Details: {error_detail}"
         except ValueError: error_message += f" - Response: {errh.response.text}"
         app.logger.error(error_message)
         return {"error": "Failed to fetch data from PostHog", "details": error_message}, errh.response.status_code
     except requests.exceptions.ConnectionError as errc:
-        # ... (same ConnectionError handling as before) ...
         error_msg = f"Error connecting to PostHog for insight {insight_id}: {errc}"
         app.logger.error(error_msg)
         return {"error": "Error connecting to PostHog", "details": error_msg}, 503
     except requests.exceptions.Timeout as errt:
-        # ... (same Timeout handling as before) ...
         error_msg = f"Request to PostHog timed out for insight {insight_id}: {errt}"
         app.logger.error(error_msg)
         return {"error": "Request to PostHog timed out", "details": error_msg}, 504
     except requests.exceptions.RequestException as err:
-        # ... (same RequestException handling as before) ...
         error_msg = f"An unexpected error occurred while fetching data for insight {insight_id}: {err}"
         app.logger.error(error_msg)
         return {"error": "An unexpected error occurred", "details": error_msg}, 500
 
+
 # --- Modified Flask Endpoints ---
-# Common function to handle request parsing and calling fetch
-def get_insight_data_for_endpoint(insight_id_env_var_name: str, default_insight_id: str):
-    time_range_str = request.args.get("time_range", "last_7_days") # Default if not provided
+def get_insight_data_for_endpoint(hardcoded_insight_id: str): # Takes the hardcoded ID directly
+    time_range_str = request.args.get("time_range", "last_7_days")
     custom_start_date = request.args.get("start_date")
     custom_end_date = request.args.get("end_date")
 
     date_params_or_error = get_date_range_params(time_range_str, custom_start_date, custom_end_date)
 
-    if "error" in date_params_or_error: # Check if get_date_range_params returned an error
-        return jsonify(date_params_or_error), 400 # Bad Request
+    if "error" in date_params_or_error:
+        return jsonify(date_params_or_error), 400
 
-    if not default_insight_id:
-        return jsonify({"error": f"{insight_id_env_var_name} not configured on the server"}), 404
+    if not hardcoded_insight_id: # Check if the hardcoded ID is an empty string
+        # This error message might need adjustment as it's no longer an "env_var_name"
+        return jsonify({"error": "Insight ID for this endpoint is not properly hardcoded (empty)."}), 500
 
-    data, status_code = fetch_posthog_insight_data(default_insight_id, date_params_or_error)
+    data, status_code = fetch_posthog_insight_data(hardcoded_insight_id, date_params_or_error)
     return jsonify(data), status_code
 
 
@@ -193,80 +178,81 @@ def get_insight_data_for_endpoint(insight_id_env_var_name: str, default_insight_
     'parameters': [
         {
             'name': 'time_range', 'in': 'query', 'type': 'string', 'required': False,
-            'description': 'Time range preset. E.g., "today", "this_week", "last_month", "year_to_date", "last_7_days", "custom". Default: "last_7_days".',
+            'description': 'Time range preset. Default: "last_7_days".',
             'default': 'last_7_days',
             'enum': ["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "year_to_date", "last_7_days", "last_30_days", "last_90_days", "all_time", "custom"]
         },
-        {'name': 'start_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'Required if time_range is "custom". Format: YYYY-MM-DD.'},
-        {'name': 'end_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'Required if time_range is "custom". Format: YYYY-MM-DD.'}
+        {'name': 'start_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'For custom time_range.'},
+        {'name': 'end_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'For custom time_range.'}
     ],
-    'responses': { # ... (responses as before) ...
-        200: {'description': 'DAU data retrieved.'}, 400: {'description': 'Bad request (e.g. invalid time_range or custom dates).'}, 404: {'description': 'DAU_INSIGHT_ID not configured.'}, 500: {'description': 'Server error.'}
+    'responses': {
+        200: {'description': 'DAU data retrieved.'}, 400: {'description': 'Bad request.'}, 500: {'description': 'Server error.'}
     }
 })
 def get_dau():
-    return get_insight_data_for_endpoint("DAU_INSIGHT_ID", DAU_INSIGHT_ID)
+    return get_insight_data_for_endpoint(DAU_INSIGHT_ID) # Pass the hardcoded global variable
 
 @app.route("/wau", methods=["GET"])
 @swag_from({
     'summary': 'Get Weekly Active Users (WAU) data for a specified time range.',
-    'parameters': [ # Same parameters as /dau
+    'parameters': [
         { 'name': 'time_range', 'in': 'query', 'type': 'string', 'required': False, 'description': 'Time range preset.', 'default': 'last_30_days', 'enum': ["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "year_to_date", "last_7_days", "last_30_days", "last_90_days", "all_time", "custom"]},
         {'name': 'start_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'For custom time_range.'},
         {'name': 'end_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'For custom time_range.'}
     ],
-    'responses': { # ... (responses as before) ...
-         200: {'description': 'WAU data retrieved.'}, 400: {'description': 'Bad request.'}, 404: {'description': 'WAU_INSIGHT_ID not configured.'}, 500: {'description': 'Server error.'}
+    'responses': {
+         200: {'description': 'WAU data retrieved.'}, 400: {'description': 'Bad request.'}, 500: {'description': 'Server error.'}
     }
 })
 def get_wau():
-    return get_insight_data_for_endpoint("WAU_INSIGHT_ID", WAU_INSIGHT_ID) # Default time_range for WAU could be last_30_days or similar
+    return get_insight_data_for_endpoint(WAU_INSIGHT_ID) # Pass the hardcoded global variable
 
 @app.route("/retention", methods=["GET"])
 @swag_from({
     'summary': 'Get User Retention data for a specified time range.',
-    'description': 'Note: Retention insights might have specific ways their date ranges are interpreted by PostHog.',
-    'parameters': [ # Same parameters as /dau
+    'parameters': [
         { 'name': 'time_range', 'in': 'query', 'type': 'string', 'required': False, 'description': 'Time range preset.', 'default': 'last_90_days', 'enum': ["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "year_to_date", "last_7_days", "last_30_days", "last_90_days", "all_time", "custom"]},
         {'name': 'start_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'For custom time_range.'},
         {'name': 'end_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'For custom time_range.'}
     ],
-    'responses': { # ... (responses as before) ...
-        200: {'description': 'Retention data retrieved.'}, 400: {'description': 'Bad request.'}, 404: {'description': 'RETENTION_INSIGHT_ID not configured.'}, 500: {'description': 'Server error.'}
+    'responses': {
+        200: {'description': 'Retention data retrieved.'}, 400: {'description': 'Bad request.'}, 500: {'description': 'Server error.'}
     }
 })
 def get_retention():
-    return get_insight_data_for_endpoint("RETENTION_INSIGHT_ID", RETENTION_INSIGHT_ID)
+    return get_insight_data_for_endpoint(RETENTION_INSIGHT_ID) # Pass the hardcoded global variable
 
 @app.route("/growth-accounting", methods=["GET"])
 @swag_from({
     'summary': 'Get Growth Accounting data for a specified time range.',
-    'description': 'Note: Growth Accounting insights might have specific ways their date ranges are interpreted by PostHog.',
-    'parameters': [ # Same parameters as /dau
+    'parameters': [
         { 'name': 'time_range', 'in': 'query', 'type': 'string', 'required': False, 'description': 'Time range preset.', 'default': 'last_30_days', 'enum': ["today", "yesterday", "this_week", "last_week", "this_month", "last_month", "year_to_date", "last_7_days", "last_30_days", "last_90_days", "all_time", "custom"]},
         {'name': 'start_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'For custom time_range.'},
         {'name': 'end_date', 'in': 'query', 'type': 'string', 'format': 'date', 'required': False, 'description': 'For custom time_range.'}
     ],
-    'responses': { # ... (responses as before) ...
-        200: {'description': 'Growth Accounting data retrieved.'}, 400: {'description': 'Bad request.'}, 404: {'description': 'GROWTH_ACCOUNTING_INSIGHT_ID not configured.'}, 500: {'description': 'Server error.'}
+    'responses': {
+        200: {'description': 'Growth Accounting data retrieved.'}, 400: {'description': 'Bad request.'}, 500: {'description': 'Server error.'}
     }
 })
 def get_growth_accounting():
-    return get_insight_data_for_endpoint("GROWTH_ACCOUNTING_INSIGHT_ID", GROWTH_ACCOUNTING_INSIGHT_ID)
+    return get_insight_data_for_endpoint(GROWTH_ACCOUNTING_INSIGHT_ID) # Pass the hardcoded global variable
 
 @app.route("/health", methods=["GET"])
-# ... (health check as before) ...
 @swag_from({ 'summary': 'Health Check', 'description': 'A simple health check endpoint.', 'responses': { 200: {'description': 'Service is healthy.'}}})
 def health_check():
     return jsonify({"status": "healthy", "message": "PostHog agent is up and running."}), 200
 
 # --- Main Execution (for local development) ---
 if __name__ == "__main__":
-    # ... (same startup checks as before) ...
-    if not all([POSTHOG_API_KEY, POSTHOG_INSTANCE_URL, POSTHOG_PROJECT_ID]):
-        print("ERROR: Missing one or more critical PostHog environment variables...")
-        # ... (print missing vars) ...
+    if not POSTHOG_API_KEY: # Only critical check left for startup is API Key
+        print("ERROR: Missing critical PostHog environment variable: POSTHOG_API_KEY")
+        print("Please set this environment variable.")
         exit(1)
+    # Assume hardcoded values are correct and non-empty
+    # You could add checks here for the hardcoded values if you want to be extra safe during development
+    # e.g., if not POSTHOG_INSTANCE_URL or not POSTHOG_PROJECT_ID or not DAU_INSIGHT_ID:
+    #          print("ERROR: One or more hardcoded PostHog configuration values are empty. Please check main.py")
+    #          exit(1)
 
     port = int(os.environ.get("PORT", 8080))
     app.run(debug=True, host="0.0.0.0", port=port)
