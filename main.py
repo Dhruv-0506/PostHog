@@ -14,7 +14,7 @@ from dateutil.rrule import rrule, WEEKLY, MO, SU
 POSTHOG_INSTANCE_URL = "https://us.posthog.com"  
 POSTHOG_PROJECT_ID = "128173"                    
 
-DAU_INSIGHT_ID = "E6G99KnQ"
+DAU_INSIGHT_ID = "2370862"
 WAU_INSIGHT_ID = "F0cK26vH" 
 RETENTION_INSIGHT_ID = "qkZyszZl"
 GROWTH_ACCOUNTING_INSIGHT_ID = "uJFgIYDk"
