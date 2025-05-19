@@ -127,7 +127,7 @@ def fetch_posthog_insight_data(insight_id: str, date_params: dict = None):
         query_params["date_from"] = date_params["date_from"]
         query_params["date_to"] = date_params["date_to"]
 
-    api_url = f"{POSTHOG_INSTANCE_URL}/api/projects/{POSTHOG_PROJECT_ID}/insights/{insight_id}/"
+    api_url = f"{POSTHOG_INSTANCE_URL}/api/projects/{POSTHOG_PROJECT_ID}/insights/{insight_id}/result/"
 
     try:
         response = requests.get(api_url, headers=headers, params=query_params, timeout=45)
