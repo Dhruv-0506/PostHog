@@ -3,3 +3,4 @@ requests
 flasgger
 python-dotenv
 gunicorn      
+python-dateutil
