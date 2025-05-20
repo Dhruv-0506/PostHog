@@ -4,6 +4,7 @@ FROM python:3.9-slim
 # 2. Set Environment Variables
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080 
+
 # 3. Set working directory
 WORKDIR /app
 
@@ -14,12 +15,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --trusted-host pypi.python.org -r requirements.txt
 
 # 6. Copy the rest of the application code
-# This will copy application.py, Chat.py, main.py, and other project files.
 COPY . .
 
-# 7. Expose the port the app runs on (matches the PORT ENV var)
-EXPOSE ${PORT}
-
+# 7. Expose the port the app runs on (Gunicorn will bind to this port internally)
+EXPOSE 8080 
 # 8. Run the application using Gunicorn
-# Points to the 'app' instance in 'application.py'
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:${PORT}", "application:app"]
+# Gunicorn binds to 0.0.0.0:8080 inside the container.
+# The deployment platform maps an external port to this internal 8080.
+CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:8080", "application:app"]
