@@ -19,9 +19,7 @@ RUN pip install --no-cache-dir --trusted-host pypi.python.org -r requirements.tx
 COPY . .
 
 # 7. Expose the port the app runs on (matches the PORT ENV var)
-EXPOSE ${PORT} # Using the variable here for consistency, though EXPOSE is static.
-               # Docker tooling might not expand it, but it's clear. 8080 is fine too.
-
+EXPOSE ${PORT} 
 # 8. Run the application using Gunicorn with environment variable expansion
 # Assuming your Flask app instance is named 'app' inside 'api_server.py'
 CMD gunicorn --workers 4 --bind 0.0.0.0:${PORT} api_server:app
