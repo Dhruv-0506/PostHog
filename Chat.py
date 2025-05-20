@@ -113,7 +113,7 @@ def chat_endpoint():
         # --- MODIFIED/REVERTED EXTRACTION LOGIC ---
         try:
             # Attempt to get the text, even if it might be None or empty
-            response_text = sync_response_data.get("data", {}).get("queryResult", {}).get("text")
+            response_text = sync_response_data.get("data", {}).get("answer")
 
             if response_text is not None: # Check if response_text is not None
                 # If it's a string (even an empty one), strip and return it.
