@@ -3,11 +3,7 @@ FROM python:3.9-slim
 
 # 2. Set Environment Variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8080 # This is good, Gunicorn will use it.
-# Add your API keys here IF AND ONLY IF you cannot set them at runtime in your deployment.
-# It's much more secure to set them in the deployment environment.
-# ENV ON_DEMAND_API_KEY="your_api_key_value"
-# ENV ON_DEMAND_EXTERNAL_USER_ID="your_user_id_value"
+ENV PORT=8080 
 
 # 3. Set working directory
 WORKDIR /app
