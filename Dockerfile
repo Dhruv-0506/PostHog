@@ -22,4 +22,4 @@ COPY . .
 EXPOSE ${PORT} 
 # 8. Run the application using Gunicorn with environment variable expansion
 # Assuming your Flask app instance is named 'app' inside 'api_server.py'
-CMD gunicorn --workers 4 --bind 0.0.0.0:${PORT} api_server:app
+CMD gunicorn --workers 4 --bind 0.0.0.0:${PORT} chat:app
