@@ -191,52 +191,72 @@ def _submit_query_internal(session_id, query_text):
 
 
 # Endpoint path changed to /chat (relative to /chat_agent prefix)
-@chat_bp.route('/chat', methods=['POST'])
-# Add @swag_from if you have the schema definition for this version
-def chat_endpoint(): # Renamed for consistency
-    """
-    Endpoint for Siri (or other clients) to send a query.
-    Expects JSON: {"query": "Your question for the chat agent"}
-    Returns JSON: {"answer": "The chat agent's response"} (Note: "answer" key used here like OldChat.py)
-    """
-    endpoint_name = "/chat_agent/chat" # For logging
-    current_app.logger.info(f"ENDPOINT {endpoint_name}: Request received.")
-    
-    # Using the placeholder check from OldChat.py for consistency, but adapt if needed
-    if not ON_DEMAND_API_KEY or ON_DEMAND_API_KEY == "<replace_api_key>": # Check actual placeholder
-        current_app.logger.error(f"ENDPOINT {endpoint_name}: ON_DEMAND_API_KEY is not configured correctly on the server.")
-        return jsonify({"answer": "Sorry, the chat service is not configured correctly on my end."}), 503 # 503 more appropriate
+# In Chat.py
 
-    # Request validation from OldChat.py
-    if not request.is_json: # OldChat.py used request.json which can raise error if not json
-        current_app.logger.warning(f"ENDPOINT {endpoint_name}: Request Content-Type is not application/json.")
+# ... (Keep create_chat_session and the LATEST _submit_query_internal I provided,
+#      which has all the try-except blocks returning strings) ...
+
+@chat_bp.route('/chat', methods=['POST'])
+def chat_endpoint():
+    current_app.logger.info(f"--- [ChatAgent OCM] {request.path} endpoint HIT ---")
+    
+    # ... (API key checks, request validation - keep as is) ...
+    if not ON_DEMAND_API_KEY or ON_DEMAND_API_KEY == "<replace_api_key>" or \
+       not ON_DEMAND_EXTERNAL_USER_ID or ON_DEMAND_EXTERNAL_USER_ID == "<replace_external_user_id>":
+        current_app.logger.critical("[ChatAgent OCM] CRITICAL_CONFIG_ERROR: API Key or User ID not configured.")
+        return jsonify({"answer": "Sorry, the chat service is not configured correctly on my end."}), 503
+
+    if not request.is_json:
+        current_app.logger.warning(f"[ChatAgent OCM] Request Content-Type is not application/json.")
         return jsonify({"answer": "Please send your question in the correct format (JSON)."}), 400
         
-    data = request.get_json(silent=True) # silent=True to avoid exception, check 'data' later
+    data = request.get_json(silent=True) 
     if not data or not isinstance(data, dict) or 'query' not in data:
-        current_app.logger.warning(f"ENDPOINT {endpoint_name}: Missing 'query' in JSON request body or body is not valid JSON. Data: {data}")
+        current_app.logger.warning(f"[ChatAgent OCM] Missing 'query' or invalid JSON. Data: {data}")
         return jsonify({"answer": "Please tell me what your question is."}), 400
 
     user_query = data.get('query')
     if not isinstance(user_query, str) or not user_query.strip():
-        current_app.logger.warning(f"ENDPOINT {endpoint_name}: 'query' is empty or not a string. Query: '{user_query}'")
+        current_app.logger.warning(f"[ChatAgent OCM] 'query' is empty or not a string. Query: '{user_query}'")
         return jsonify({"answer": "Your question seems to be empty. Please try again."}), 400
 
-    current_app.logger.info(f"ENDPOINT {endpoint_name}: User query: '{user_query[:100]}...'")
+    current_app.logger.info(f"[ChatAgent OCM] User query: '{user_query[:100]}...'")
 
     session_id = _create_chat_session_internal()
     if not session_id:
-        current_app.logger.error(f"ENDPOINT {endpoint_name}: Failed to create chat session with OnDemand API.")
-        return jsonify({"answer": "Sorry, I couldn't start a new chat session right now. Please try again later."}), 503
+        current_app.logger.error(f"[ChatAgent OCM] Failed to create chat session.")
+        return jsonify({"answer": "Sorry, I couldn't start a new chat session right now."}), 503
 
-    # _submit_query_internal now returns either the extracted string answer, 
-    # or the full JSON response as a string if extraction fails, or an error string.
-    answer_text_or_json_string = _submit_query_internal(session_id, user_query)
+    current_app.logger.info(f"[ChatAgent OCM] Session created: {session_id}. Submitting query...")
+    
+    # _submit_query_internal is now expected to ALWAYS return a string.
+    # This string is either the extracted answer, a JSON dump, or an error message.
+    answer_string = _submit_query_internal(session_id, user_query)
 
-    current_app.logger.info(f"ENDPOINT {endpoint_name}: Replying with content of length: {len(str(answer_text_or_json_string))}")
-    # The client will receive whatever _submit_query_internal returned, inside the "answer" field.
-    # This matches OldChat.py's behavior where a failed extraction still sent data back.
-    return jsonify({"answer": answer_text_or_json_string})
+    # Check if _submit_query_internal itself had an issue and returned one of its error strings
+    # or if it returned the JSON dump because it couldn't extract a clean answer.
+    # We can log this for clarity. The main thing is that answer_string should be a string.
+
+    if not isinstance(answer_string, str):
+        # This case should ideally NOT be hit if _submit_query_internal is correctly returning strings from all paths.
+        # This would indicate a bug in _submit_query_internal's return logic.
+        current_app.logger.error(f"[ChatAgent OCM] CRITICAL BUG: _submit_query_internal did NOT return a string. Returned type: {type(answer_string)}, value: {str(answer_string)[:200]}. Session: {session_id}")
+        return jsonify({"answer": "Sorry, an internal error occurred while processing your request (unexpected return type)."}), 500
+    
+    # Log what kind of string we got (is it JSON, or a simple answer, or an error message?)
+    # This helps in debugging if the client gets unexpected content.
+    if answer_string.startswith("Error from chat service:") or \
+       answer_string.startswith("Sorry,"):
+        current_app.logger.warning(f"[ChatAgent OCM] _submit_query_internal returned an error message: '{answer_string}'")
+    elif answer_string.startswith("{") and answer_string.endswith("}"): # Crude check for JSON string
+        current_app.logger.info(f"[ChatAgent OCM] _submit_query_internal returned full JSON response as string (length: {len(answer_string)}). Answer not specifically extracted.")
+    else:
+        current_app.logger.info(f"[ChatAgent OCM] _submit_query_internal returned extracted answer string (length: {len(answer_string)}).")
+
+    # The client always gets the string from _submit_query_internal in the "answer" field.
+    return jsonify({"answer": answer_string})
+
+# ... (rest of Chat.py, including health_check, _create_chat_session_internal, and the LATEST _submit_query_internal)
 
 
 # Test endpoint (similar to OldChat.py's /ping-ondemand-config)
