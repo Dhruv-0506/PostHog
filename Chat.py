@@ -76,7 +76,7 @@ def _submit_query_internal(session_id, query_text):
     headers = {"apikey": ON_DEMAND_API_KEY}
 
     # ** KEY CHANGE: Use Agent IDs relevant to your CURRENT PostHog agent setup **
-    agent_ids = ["agent-1712327325", "agent-1713962163", "agent-1747649298", "agent-1746427905"]
+    agent_ids = ["agent-1712327325", "agent-1713962163", "agent-1747649298", "agent-1746427905", "agent-1747298877"]
     
     # Stop sequences (empty as per OldChat.py's likely implication)
     stop_sequences = []
