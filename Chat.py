@@ -10,7 +10,7 @@ load_dotenv()
 
 ON_DEMAND_API_KEY = os.environ.get("ON_DEMAND_API_KEY")
 ON_DEMAND_EXTERNAL_USER_ID = os.environ.get("ON_DEMAND_EXTERNAL_USER_ID")
-DID_API_KEY = os.environ.get("DID_API_KEY")  # Add this to your .env
+DID_API_KEY = os.environ.get("DID_API_KEY")
 DID_AVATAR_URL = os.environ.get("DID_AVATAR_URL", "https://create-images-results.d-id.com/DefaultAvatarImage.png")
 
 chat_bp = Blueprint('chat_agent', __name__, url_prefix='/chat_agent')
@@ -86,11 +86,13 @@ def _send_to_did(text):
             },
             "source_url": DID_AVATAR_URL
         }
-        response = requests.post("https://api.d-id.com/talks", headers=headers, json=body)
+        response = requests.post("https://api.d-id.com/talks/talks", headers=headers, json=body)
+        current_app.logger.info(f"D-ID response status: {response.status_code}")
+        current_app.logger.info(f"D-ID response body: {response.text}")
+        
         if response.status_code == 200:
-            return response.json().get("result_url")
+            return response.json().get("url")  # Correct key
         else:
-            current_app.logger.error(f"D-ID Error: {response.status_code} - {response.text}")
             return None
     except Exception as e:
         current_app.logger.error(f"Error sending to D-ID: {e}")
@@ -116,7 +118,7 @@ def chat_endpoint():
 
     video_url = _send_to_did(text_response)
     if not video_url:
-        return jsonify({"answer": "Failed to generate video avatar"}), 502
+        return jsonify({"answer": text_response, "video_url": None}), 502
 
     return jsonify({
         "answer": text_response,
