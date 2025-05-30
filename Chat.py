@@ -41,11 +41,11 @@ def _submit_query_internal(session_id, query_text):
         "responseMode": "sync",
         "reasoningMode": "low",
         "modelConfigs": {
-            "fulfillmentPrompt": "", 
+            "fulfillmentPrompt": "",
             "stopSequences": [],
             "temperature": 0.7,
             "topP": 1,
-            "maxTokens": 0, 
+            "maxTokens": 0,
             "presencePenalty": 0,
             "frequencyPenalty": 0
         },
@@ -86,12 +86,12 @@ def _send_to_did(text):
             },
             "source_url": DID_AVATAR_URL
         }
-        response = requests.post("https://api.d-id.com/talks/talks", headers=headers, json=body)
+        response = requests.post("https://api.d-id.com/talks", headers=headers, json=body)
         current_app.logger.info(f"D-ID response status: {response.status_code}")
         current_app.logger.info(f"D-ID response body: {response.text}")
-        
+
         if response.status_code == 200:
-            return response.json().get("url")  # Correct key
+            return response.json().get("url")  # This is the actual video URL
         else:
             return None
     except Exception as e:
@@ -117,12 +117,9 @@ def chat_endpoint():
         return jsonify({"answer": text_response}), 500
 
     video_url = _send_to_did(text_response)
-    if not video_url:
-        return jsonify({"answer": text_response, "video_url": None}), 502
-
     return jsonify({
         "answer": text_response,
-        "video_url": video_url
+        "video_url": video_url  # could be None if D-ID failed
     })
 
 @chat_bp.route('/health', methods=['GET'])
