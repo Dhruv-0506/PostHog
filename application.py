@@ -6,7 +6,7 @@ from flasgger import Swagger, swag_from
 from dotenv import load_dotenv
 
 # Import your blueprints
-from Chat import chat_bp
+from Chat import chat_bp_did
 from main import posthog_bp
 
 load_dotenv()
