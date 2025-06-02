@@ -37,7 +37,7 @@ swagger_config['version'] = "1.0.0"
 swagger = Swagger(app, config=swagger_config)
 
 # Register the blueprints
-app.register_blueprint(chat_bp) # Will be available at /chat_agent/*
+app.register_blueprint(chat_bp_did) # Will be available at /chat_agent/*
 app.register_blueprint(posthog_bp) # Will be available at /analytics/*
 
 # --- Root Level Routes ---
